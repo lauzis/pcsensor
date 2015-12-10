@@ -36,6 +36,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <ctype.h>
 
 
 #define VERSION "1.0.1"
