@@ -36,7 +36,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-
+#include <ctype.h>
 
 #define VERSION "1.0.1"
 
@@ -64,6 +64,11 @@ static int seconds=5;
 static int formato=0;
 static int mrtg=0;
 static int calibration=0;
+
+//sometimes there is need to adjust just one of the values
+//TODO : make these parameters readable from outside
+static int inside_calibration=0;
+static int outside_calibration=0;
 
 
 void bad(const char *why) {
@@ -271,10 +276,11 @@ void interrupt_read_temperatura(usb_dev_handle *dev, float *tempInC, float *temp
 
     temperature = (answer[3] & 0xFF) + ((signed char)answer[2] << 8);
     temperature += calibration;
+    temperature += inside_calibration;
     *tempInC = temperature * (125.0 / 32000.0);
 
     temperature = (answer[5] & 0xFF) + ((signed char)answer[4] << 8);
-    temperature += calibration;
+    temperature += outside_calibration;
     *tempOutC = temperature * (125.0 / 32000.0);
 
 }
@@ -319,7 +325,7 @@ int main( int argc, char **argv) {
      struct tm *local;
      time_t t;
 
-     while ((c = getopt (argc, argv, "mfcvhl::a:")) != -1)
+     while ((c = getopt (argc, argv, "mfjcvhl::a:")) != -1)
      switch (c)
        {
        case 'v':
@@ -331,6 +337,9 @@ int main( int argc, char **argv) {
        case 'f':
          formato=2; //Fahrenheit
          break;
+	case 'j':
+		formato=3; //json
+	break;
        case 'm':
          mrtg=1;
          break;
@@ -366,6 +375,7 @@ int main( int argc, char **argv) {
 	 printf("          -f output only in Fahrenheit\n");
 	 printf("          -a[n] increase or decrease temperature in 'n' degrees for device calibration\n");
 	 printf("          -m output for mrtg integration\n");
+	 printf("          -j output json\n");
 
 	 exit(EXIT_FAILURE);
        default:
@@ -414,32 +424,59 @@ int main( int argc, char **argv) {
               if (formato==2) {
                   printf("%.2f\n", (9.0 / 5.0 * tempInC + 32.0));
                   printf("%.2f\n", (9.0 / 5.0 * tempOutC + 32.0));
-              } else {
-                  printf("%.2f\n", tempInC);
-                  printf("%.2f\n", tempOutC);
-              }
-
-              printf("%02d:%02d\n",
+                  printf("%02d:%02d\n",
                           local->tm_hour,
                           local->tm_min);
+                  printf("pcsensor\n");
+              } else if(formato==1) {
+                  printf("%.2f\n", tempInC);
+                  printf("%.2f\n", tempOutC);
+                  printf("%02d:%02d\n",
+                          local->tm_hour,
+                          local->tm_min);
+                  printf("pcsensor\n");
+              } else if (formato==3)
+		{
+                printf("{'internal':%.2f,'external':%.2f,'timestamp':'%02d:%02d'} \n", tempInC, tempOutC, local->tm_hour,local->tm_min);
 
-              printf("pcsensor\n");
+		}
+        
+              
+
+              
            } else {
-              printf("%04d/%02d/%02d %02d:%02d:%02d\n",
+              
+
+              if (formato==2) {
+                printf("%04d/%02d/%02d %02d:%02d:%02d\n",
                           local->tm_year +1900,
                           local->tm_mon + 1,
                           local->tm_mday,
                           local->tm_hour,
                           local->tm_min,
                           local->tm_sec);
-
-              if (formato==2) {
                   printf("Temperature (internal) %.2fF\n", (9.0 / 5.0 * tempInC + 32.0));
                   printf("Temperature (external) %.2fF\n", (9.0 / 5.0 * tempOutC + 32.0));
               } else if (formato==1) {
+                printf("%04d/%02d/%02d %02d:%02d:%02d\n",
+                          local->tm_year +1900,
+                          local->tm_mon + 1,
+                          local->tm_mday,
+                          local->tm_hour,
+                          local->tm_min,
+                          local->tm_sec);
                   printf("Temperature (internal) %.2fC\n", tempInC);
                   printf("Temperature (external) %.2fC\n", tempOutC);
-              } else {
+              } else if(formato==3)
+		{
+                  printf("{'internal':%.2f,'external':%.2f,'timestamp':'%04d-%02d-%02d %02d:%02d:%02d'} \n", tempInC, tempOutC,local->tm_year +1900,
+                          local->tm_mon + 1,
+                          local->tm_mday,
+                          local->tm_hour,
+                          local->tm_min,
+                          local->tm_sec);
+
+		}else {
                   printf("Temperature (internal) %.2fF %.2fC\n", (9.0 / 5.0 * tempInC + 32.0), tempInC);
                   printf("Temperature (external) %.2fF %.2fC\n", (9.0 / 5.0 * tempOutC + 32.0), tempOutC);
               }
